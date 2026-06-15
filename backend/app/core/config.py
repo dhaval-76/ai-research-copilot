@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.2
     llm_max_retries: int = 3
 
+    # --- search provider ---
+    # If TAVILY_API_KEY is set, Tavily is used (recommended -- more
+    # reliable than DDG on restricted networks). Otherwise falls back
+    # to duckduckgo-search.
+    tavily_api_key: str = ""
+
     # --- workflow tuning ---
     max_research_retries: int = 1
     max_search_results_per_query: int = 4
