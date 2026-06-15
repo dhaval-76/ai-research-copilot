@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from app.core import db
 from app.graph.workflow import research_graph
 from app.models.schemas import (
+    ProgressEvent,
     SessionCreateRequest,
     SessionCreateResponse,
     SessionDetailResponse,
@@ -53,7 +54,12 @@ def get_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
     report = db.get_report(session_id)
-    return SessionDetailResponse(**session, report=report)
+    progress_events = db.get_progress_events(session_id)
+    return SessionDetailResponse(
+        **session,
+        report=report,
+        progress_events=[ProgressEvent(**e) for e in progress_events],
+    )
 
 
 @router.get("/{session_id}/run")
@@ -85,9 +91,17 @@ def run_session(session_id: str):
         else:
             if session["status"] in ("pending", "failed"):
                 research_graph.checkpointer.delete_thread(session_id)
+                db.clear_progress_events(session_id)
             stream_input = initial_state
 
         db.update_session_status(session_id, status="running")
+
+        def emit(event: dict):
+            db.add_progress_event(
+                session_id,
+                {k: v for k, v in event.items() if k != "report"},
+            )
+            return _sse(event)
 
         try:
             final_report = None
@@ -103,7 +117,7 @@ def run_session(session_id: str):
                         "status": status_msg,
                         "done": False,
                     }
-                    yield _sse(event)
+                    yield emit(event)
 
                     if "final_report" in update:
                         final_report = update["final_report"]
@@ -122,7 +136,7 @@ def run_session(session_id: str):
                 session_id, status="completed", research_mode=research_mode
             )
 
-            yield _sse(
+            yield emit(
                 {
                     "node": "report_generation",
                     "status": "Done",
@@ -134,7 +148,7 @@ def run_session(session_id: str):
         except Exception as exc:  # noqa: BLE001
             logger.exception("Workflow run failed for session %s", session_id)
             db.update_session_status(session_id, status="failed", error=str(exc))
-            yield _sse(
+            yield emit(
                 {
                     "node": "error",
                     "status": "Workflow failed",

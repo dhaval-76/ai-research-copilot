@@ -4,9 +4,10 @@ SQLite persistence layer.
 Uses stdlib sqlite3 directly (no ORM) -- keeps dependencies minimal and
 avoids version-conflict risk. Three tables:
 
-- sessions:      one row per research session (inputs + status)
-- reports:       final structured report JSON, one per completed session
-- chat_messages: follow-up chat history per session
+- sessions:        one row per research session (inputs + status)
+- reports:         final structured report JSON, one per completed session
+- chat_messages:   follow-up chat history per session
+- progress_events: workflow SSE trace per session (survives reconnect)
 
 This stores session metadata and completed reports. In-progress workflow
 state is checkpointed separately by LangGraph's SqliteSaver (see
@@ -47,6 +48,17 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     session_id TEXT NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions (id)
+);
+
+CREATE TABLE IF NOT EXISTS progress_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    node TEXT NOT NULL,
+    status TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions (id)
 );
@@ -172,3 +184,53 @@ def get_chat_history(session_id: str) -> list[dict]:
             (session_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Workflow progress events
+# ---------------------------------------------------------------------------
+
+
+def add_progress_event(session_id: str, event: dict):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO progress_events
+               (session_id, node, status, done, error, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                session_id,
+                event["node"],
+                event.get("status", ""),
+                1 if event.get("done") else 0,
+                event.get("error"),
+                _now(),
+            ),
+        )
+
+
+def get_progress_events(session_id: str) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT node, status, done, error FROM progress_events
+               WHERE session_id = ? ORDER BY id ASC""",
+            (session_id,),
+        ).fetchall()
+        events = []
+        for row in rows:
+            event = {
+                "node": row["node"],
+                "status": row["status"],
+                "done": bool(row["done"]),
+            }
+            if row["error"]:
+                event["error"] = row["error"]
+            events.append(event)
+        return events
+
+
+def clear_progress_events(session_id: str):
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM progress_events WHERE session_id = ?",
+            (session_id,),
+        )

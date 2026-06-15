@@ -45,6 +45,7 @@ export interface SessionSummary {
 
 export interface SessionDetail extends SessionSummary {
   report: StructuredReport | null;
+  progress_events: ProgressEvent[];
 }
 
 export interface ChatMessage {

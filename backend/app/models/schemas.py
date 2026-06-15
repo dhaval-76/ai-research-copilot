@@ -46,15 +46,6 @@ class SessionSummary(BaseModel):
     updated_at: str
 
 
-class SessionDetailResponse(SessionSummary):
-    report: Optional[StructuredReport] = None
-
-
-# ---------------------------------------------------------------------------
-# Workflow progress (streamed)
-# ---------------------------------------------------------------------------
-
-
 class ProgressEvent(BaseModel):
     """
     One SSE event emitted while a workflow run is in progress.
@@ -69,6 +60,16 @@ class ProgressEvent(BaseModel):
     done: bool = False
     report: Optional[StructuredReport] = None
     error: Optional[str] = None
+
+
+class SessionDetailResponse(SessionSummary):
+    report: Optional[StructuredReport] = None
+    progress_events: list[ProgressEvent] = []
+
+
+# ---------------------------------------------------------------------------
+# Workflow progress (streamed)
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

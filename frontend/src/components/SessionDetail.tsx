@@ -20,9 +20,9 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
   const [runError, setRunError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[] | null>(null);
 
-  // Reset local state when switching sessions
+  // Reset local state when switching sessions; restore persisted workflow trace
   useEffect(() => {
-    setEvents([]);
+    setEvents(session.progress_events ?? []);
     setRunning(false);
     setReport(session.report);
     setRunError(null);
@@ -33,7 +33,7 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
         .then((res) => setChatMessages(res.messages))
         .catch(() => setChatMessages([]));
     }
-  }, [session.id]);
+  }, [session.id, session.progress_events, session.report]);
 
   const isFailed = session.status === "failed";
   const isInterrupted = session.status === "running";
@@ -51,7 +51,10 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
     (session.status === "pending" || isInterrupted);
 
   function handleRun() {
-    setEvents([]);
+    const isFreshRun = session.status === "pending" || session.status === "failed";
+    if (isFreshRun) {
+      setEvents([]);
+    }
     setRunError(null);
     setRunning(true);
     onStatusChange(session.id, "running");
@@ -169,7 +172,7 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
           </div>
         )}
 
-        {/* Loading state (no events yet) */}
+        {/* Loading state — only before the first event of a fresh run */}
         {running && events.length === 0 && (
           <div className="flex items-center gap-2 text-sm text-muted">
             <Loader2 size={15} className="animate-spin" />
