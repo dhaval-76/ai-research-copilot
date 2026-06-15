@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   CreateSessionInput,
+  CreateSessionResponse,
   ProgressEvent,
   SessionDetail,
   SessionSummary,
@@ -39,15 +40,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export function createSession(
   input: CreateSessionInput
-): Promise<{ session_id: string; status: string }> {
+): Promise<CreateSessionResponse> {
   return request("/sessions", {
     method: "POST",
     body: JSON.stringify({
       company_name: input.companyName,
-      website: input.website || null,
+      website: input.website,
       objective: input.objective,
     }),
   });
+}
+
+export function regenerateSession(sessionId: string): Promise<SessionDetail> {
+  return request(`/sessions/${sessionId}/regenerate`, { method: "POST" });
 }
 
 export function listSessions(): Promise<SessionSummary[]> {

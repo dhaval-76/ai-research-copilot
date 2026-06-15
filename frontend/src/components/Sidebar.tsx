@@ -28,8 +28,8 @@ export default function Sidebar({
     e.preventDefault();
     setFormError(null);
 
-    if (!companyName.trim() || !objective.trim()) {
-      setFormError("Company name and objective are required.");
+    if (!companyName.trim() || !website.trim() || !objective.trim()) {
+      setFormError("Company name, website, and objective are required.");
       return;
     }
 
@@ -79,12 +79,13 @@ export default function Sidebar({
             </div>
             <div>
               <label className="block text-xs font-mono text-muted mb-1">
-                Website (optional)
+                Website
               </label>
               <input
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
                 placeholder="https://stripe.com"
+                required
                 className="w-full bg-surface2 border border-border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
               />
             </div>

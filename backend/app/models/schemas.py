@@ -19,7 +19,7 @@ from app.graph.state import StructuredReport
 
 class SessionCreateRequest(BaseModel):
     company_name: str = Field(..., min_length=1, examples=["Stripe"])
-    website: Optional[str] = Field(default=None, examples=["https://stripe.com"])
+    website: str = Field(..., min_length=1, examples=["https://stripe.com"])
     objective: str = Field(
         ...,
         min_length=1,
@@ -32,12 +32,13 @@ class SessionCreateRequest(BaseModel):
 class SessionCreateResponse(BaseModel):
     session_id: str
     status: str
+    existing: bool = False
 
 
 class SessionSummary(BaseModel):
     id: str
     company_name: str
-    website: Optional[str] = None
+    website: str
     objective: str
     research_mode: Optional[str] = None
     status: str

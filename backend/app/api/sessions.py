@@ -1,8 +1,9 @@
 """
 Session APIs + Workflow Execution APIs.
 
-- POST   /sessions             create a session
-- GET    /sessions             list session history
+- POST   /sessions                  create a session (or return existing)
+- POST   /sessions/{id}/regenerate  reset session outputs for a fresh run
+- GET    /sessions                  list session history
 - GET    /sessions/{id}        session detail (incl. report if complete)
 - GET    /sessions/{id}/run    SSE stream: executes the LangGraph workflow,
                                 emitting one event per node, then persists
@@ -32,14 +33,51 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 @router.post("", response_model=SessionCreateResponse)
 def create_session(payload: SessionCreateRequest):
-    session_id = str(uuid.uuid4())
-    db.create_session(
-        session_id=session_id,
-        company_name=payload.company_name,
-        website=payload.website or "",
-        objective=payload.objective,
+    existing = db.find_session_by_inputs(
+        payload.company_name,
+        payload.website,
+        payload.objective,
     )
+    if existing:
+        return SessionCreateResponse(
+            session_id=existing["id"],
+            status=existing["status"],
+            existing=True,
+        )
+
+    session_id = str(uuid.uuid4())
+    try:
+        db.create_session(
+            session_id=session_id,
+            company_name=payload.company_name,
+            website=payload.website,
+            objective=payload.objective,
+        )
+    except db.SessionAlreadyExistsError as exc:
+        return SessionCreateResponse(
+            session_id=exc.session_id,
+            status=exc.status,
+            existing=True,
+        )
     return SessionCreateResponse(session_id=session_id, status="pending")
+
+
+@router.post("/{session_id}/regenerate", response_model=SessionDetailResponse)
+def regenerate_session(session_id: str):
+    session = db.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session["status"] == "running":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot regenerate while a run is in progress",
+        )
+
+    research_graph.checkpointer.delete_thread(session_id)
+    db.reset_session(session_id)
+
+    session = db.get_session(session_id)
+    return SessionDetailResponse(**session, report=None, progress_events=[])
 
 
 @router.get("", response_model=list[SessionSummary])

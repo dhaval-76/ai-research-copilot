@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Play, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
+import { Play, Loader2, RefreshCw, ArrowLeft, RotateCcw } from "lucide-react";
 import { StatusBadge } from "./Badges";
 import WorkflowProgress from "./WorkflowProgress";
 import ReportView from "./ReportView";
@@ -10,12 +10,14 @@ import type { ChatMessage, ProgressEvent, SessionDetail as SessionDetailType, Se
 interface SessionDetailProps {
   session: SessionDetailType;
   onStatusChange: (sessionId: string, status: SessionStatus) => void;
+  onRegenerate: (sessionId: string) => Promise<SessionDetailType>;
   onBack: () => void;
 }
 
-export default function SessionDetail({ session, onStatusChange, onBack }: SessionDetailProps) {
+export default function SessionDetail({ session, onStatusChange, onRegenerate, onBack }: SessionDetailProps) {
   const [events, setEvents] = useState<ProgressEvent[]>([]);
   const [running, setRunning] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [report, setReport] = useState<StructuredReport | null>(session.report);
   const [runError, setRunError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[] | null>(null);
@@ -24,6 +26,7 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
   useEffect(() => {
     setEvents(session.progress_events ?? []);
     setRunning(false);
+    setRegenerating(false);
     setReport(session.report);
     setRunError(null);
     setChatMessages(null);
@@ -33,19 +36,21 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
         .then((res) => setChatMessages(res.messages))
         .catch(() => setChatMessages([]));
     }
-  }, [session.id, session.progress_events, session.report]);
+  }, [session.id]);
 
+  const isCompleted = session.status === "completed";
   const isFailed = session.status === "failed";
   const isInterrupted = session.status === "running";
   const hasRunError = Boolean(runError);
   const hasPersistedError = Boolean(session.error);
+  const isBusy = running || regenerating;
 
   const showFailedPanel =
-    !running && isFailed && (hasRunError || hasPersistedError);
-  const showConnectionLostPanel = !running && isInterrupted && hasRunError;
-  const showInterruptedPanel = !running && isInterrupted && !hasRunError;
+    !isBusy && isFailed && (hasRunError || hasPersistedError);
+  const showConnectionLostPanel = !isBusy && isInterrupted && hasRunError;
+  const showInterruptedPanel = !isBusy && isInterrupted && !hasRunError;
   const showPrimaryButton =
-    !running &&
+    !isBusy &&
     !showFailedPanel &&
     !showConnectionLostPanel &&
     (session.status === "pending" || isInterrupted);
@@ -83,6 +88,27 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
     );
   }
 
+  async function handleRegenerate() {
+    const confirmed = window.confirm(
+      "Regenerate this report? The current report, workflow trace, and chat history will be cleared."
+    );
+    if (!confirmed) return;
+
+    setRegenerating(true);
+    setRunError(null);
+    try {
+      await onRegenerate(session.id);
+      setEvents([]);
+      setReport(null);
+      setChatMessages(null);
+      handleRun();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Could not regenerate session.");
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   const primaryButtonLabel = isInterrupted ? "Resume research" : "Run research";
 
   return (
@@ -104,7 +130,7 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
           </div>
           {session.website && (
             <a
-              href={session.website}
+              href={session.website.startsWith("http") ? session.website : `https://${session.website}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-mono text-accent hover:underline"
@@ -119,6 +145,21 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
             </span>
           )}
         </div>
+
+        {isCompleted && !isBusy && (
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="flex items-center gap-2 rounded-md border border-border text-sm px-4 py-2 text-muted hover:text-text hover:border-accent/40 transition-colors disabled:opacity-60"
+          >
+            {regenerating ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <RotateCcw size={15} />
+            )}
+            Regenerate report
+          </button>
+        )}
 
         {/* Interrupted run — offer resume without treating it as a failure */}
         {showInterruptedPanel && (

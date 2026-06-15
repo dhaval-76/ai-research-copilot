@@ -34,7 +34,7 @@ export interface StructuredReport {
 export interface SessionSummary {
   id: string;
   company_name: string;
-  website: string | null;
+  website: string;
   objective: string;
   research_mode: ResearchMode | null;
   status: SessionStatus;
@@ -67,6 +67,12 @@ export interface ProgressEvent {
 
 export interface CreateSessionInput {
   companyName: string;
-  website?: string;
+  website: string;
   objective: string;
+}
+
+export interface CreateSessionResponse {
+  session_id: string;
+  status: string;
+  existing: boolean;
 }

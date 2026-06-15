@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles, AlertCircle, Loader2 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import SessionDetail from "./components/SessionDetail";
-import { createSession, getSession, listSessions, ApiError } from "./api";
+import NotificationBanner, { type Notification } from "./components/NotificationBanner";
+import { createSession, getSession, listSessions, regenerateSession, ApiError } from "./api";
 import type { CreateSessionInput, SessionDetail as SessionDetailType, SessionStatus, SessionSummary } from "./types";
 
 type MobileView = "sidebar" | "detail";
@@ -15,6 +16,17 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [mobileView, setMobileView] = useState<MobileView>("sidebar");
+  const [notification, setNotification] = useState<Notification | null>(null);
+  const notificationId = useRef(0);
+
+  const dismissNotification = useCallback(() => {
+    setNotification(null);
+  }, []);
+
+  function showNotification(message: string) {
+    notificationId.current += 1;
+    setNotification({ id: notificationId.current, message });
+  }
 
   useEffect(() => {
     refreshSessions();
@@ -63,9 +75,30 @@ export default function App() {
       const res = await createSession({ companyName, website, objective });
       await refreshSessionsAndSelect(res.session_id);
       setMobileView("detail");
+      if (res.existing) {
+        showNotification("A session with these inputs already exists — opened it.");
+      }
     } finally {
       setCreating(false);
     }
+  }
+
+  async function handleRegenerate(sessionId: string) {
+    const updated = await regenerateSession(sessionId);
+    setSelectedSession(updated);
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionId
+          ? {
+              ...s,
+              status: updated.status,
+              error: updated.error,
+              research_mode: updated.research_mode,
+            }
+          : s
+      )
+    );
+    return updated;
   }
 
   async function refreshSessionsAndSelect(sessionId: string) {
@@ -103,6 +136,11 @@ export default function App() {
 
   return (
     <div className="h-screen flex">
+      <NotificationBanner
+        notification={notification}
+        onDismiss={dismissNotification}
+      />
+
       <div className={`${mobileView === "sidebar" ? "flex" : "hidden"} md:flex w-full md:w-auto`}>
         <Sidebar
           sessions={sessions}
@@ -124,6 +162,7 @@ export default function App() {
             key={selectedSession.id}
             session={selectedSession}
             onStatusChange={handleStatusChange}
+            onRegenerate={handleRegenerate}
             onBack={() => setMobileView("sidebar")}
           />
         ) : (
