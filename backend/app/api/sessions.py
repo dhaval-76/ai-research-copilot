@@ -77,6 +77,15 @@ def run_session(session_id: str):
             "objective": session["objective"],
         }
         config = {"configurable": {"thread_id": session_id}}
+        graph_state = research_graph.get_state(config)
+
+        if session["status"] == "running" and graph_state.next:
+            stream_input = None
+            logger.info("Resuming session %s from checkpoint", session_id)
+        else:
+            if session["status"] in ("pending", "failed"):
+                research_graph.checkpointer.delete_thread(session_id)
+            stream_input = initial_state
 
         db.update_session_status(session_id, status="running")
 
@@ -84,7 +93,7 @@ def run_session(session_id: str):
             final_report = None
             research_mode = None
 
-            for step in research_graph.stream(initial_state, config=config):
+            for step in research_graph.stream(stream_input, config=config):
                 for node_name, update in step.items():
                     status_msg = update.get("status", "")
                     research_mode = update.get("research_mode", research_mode)

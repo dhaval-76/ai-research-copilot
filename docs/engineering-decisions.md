@@ -27,31 +27,25 @@ under-researched topics surface honestly in `Unknowns` rather than
 the system endlessly trying to manufacture a confident answer --
 which is the more honest behavior for a sales-prep tool anyway.
 
-## 2. Split persistence: MemorySaver (in-process) + SQLite (durable)
+## 2. Split persistence: SqliteSaver (workflow checkpoints) + SQLite (session metadata)
 
-**Decision:** LangGraph checkpointing uses the built-in `MemorySaver`
-for intra-run state (per-node checkpoints while a session is
-executing). Durable, cross-restart persistence -- the spec's
-"Persistence Layer" requirement -- is a separate plain SQLite layer
-(stdlib `sqlite3`, no ORM) storing session metadata and the final
-report.
+**Decision:** LangGraph checkpointing uses `SqliteSaver` from
+`langgraph-checkpoint-sqlite`, persisting per-node state to a dedicated
+SQLite file (`CHECKPOINT_DB_PATH`). Durable session metadata and final
+reports live in a separate plain SQLite layer (stdlib `sqlite3`, no ORM).
 
 **Alternatives considered:**
-- `SqliteSaver`/`PostgresSaver` as the LangGraph checkpointer, giving
-  true crash recovery (resume a workflow mid-run after a process
-  restart). This was the original design.
-- This was changed during implementation: `langgraph-checkpoint-sqlite`
-  had an unresolvable dependency conflict with the pinned `langgraph`
-  version (`langgraph-checkpoint-sqlite` requires
-  `langgraph-checkpoint<2.0`, while `langgraph>=0.2.39` requires
-  `>=2.0`), and no version of `langgraph-checkpoint-sqlite` satisfying
-  the newer constraint appears to be published.
+- `MemorySaver` (in-process only) -- loses in-progress runs on restart.
+- `PostgresSaver` -- heavier ops for a single-instance demo.
+- Upgrading to `langgraph-checkpoint-sqlite` 3.x -- requires bumping
+  `langgraph` past 0.2.x due to a `langgraph-checkpoint` version split;
+  deferred until a broader dependency upgrade.
 
-**Tradeoff:** A backend restart mid-run loses that run's in-progress
-state (it would need to be re-triggered from scratch). Completed
-sessions and reports are unaffected -- they're in SQLite. Given runs
-take ~60-90 seconds, this is an acceptable gap for the assignment's
-scope, but is the top item for the "2 more weeks" list below.
+**Tradeoff:** Two SQLite files instead of one shared store. Checkpoint
+tables are owned by LangGraph and not queried by app code directly, so
+keeping them separate avoids schema coupling. `SqliteSaver` is
+synchronous and not ideal for high concurrency, but is fine for this
+single-worker demo.
 
 ## 3. Search provider: Tavily over duckduckgo-search
 
@@ -80,8 +74,8 @@ abstracted behind one function.
 
 ## Top Technical Debt Items
 
-1. **No crash recovery for in-progress runs** -- see decision #2. A
-   backend restart loses any session currently mid-workflow.
+1. **Stale checkpoint cleanup** -- abandoned `running` sessions leave rows
+   in the checkpoint DB until manually cleared; no TTL or sweeper yet.
 2. **No automated tests** -- given the 3-day scope, testing was manual
    (the `scripts/test_graph.py` CLI script + curl against the API).
    Node functions are pure-ish (`state -> partial state`) and should be
@@ -108,17 +102,13 @@ monitoring on fallback-trigger rates.
 
 ## With 2 More Weeks
 
-1. Swap `MemorySaver` for `PostgresSaver` (or a working
-   `SqliteSaver` once the dependency conflict is resolved upstream) for
-   true crash recovery, and move session/report storage to the same
-   Postgres instance.
-2. Add a small eval harness: run the workflow against ~20 known
+1. Add a small eval harness: run the workflow against ~20 known
    companies, score report quality (completeness, source validity,
    hallucination rate) to catch regressions when prompts change.
-3. Stream chat responses token-by-token via SSE (same pattern as
+2. Stream chat responses token-by-token via SSE (same pattern as
    workflow progress).
-4. Add the parallel research fan-out (LangGraph `Send` API) discussed
+3. Add the parallel research fan-out (LangGraph `Send` API) discussed
    during design -- run the 5 research topics concurrently instead of
    sequentially, cutting run time significantly.
-5. Add lightweight monitoring: log fallback-trigger rates per node,
+4. Add lightweight monitoring: log fallback-trigger rates per node,
    token usage per run, and search-provider failure rates.

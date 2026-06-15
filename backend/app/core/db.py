@@ -8,8 +8,9 @@ avoids version-conflict risk. Three tables:
 - reports:       final structured report JSON, one per completed session
 - chat_messages: follow-up chat history per session
 
-This is the "Persistence Layer" required by the spec, separate from
-the in-process LangGraph MemorySaver checkpointer (see workflow.py).
+This stores session metadata and completed reports. In-progress workflow
+state is checkpointed separately by LangGraph's SqliteSaver (see
+workflow.py / checkpoint.py).
 """
 
 import json

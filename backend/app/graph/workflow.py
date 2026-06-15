@@ -8,22 +8,16 @@ conditional edges:
   2. research -> [gap_fill | analysis]              (data-richness check)
   3. quality_check -> [gap_fill | report_generation] (bounded retry loop)
 
-Persistence/recoverability within a single process run is provided by
-LangGraph's built-in MemorySaver checkpointer: every node transition is
-checkpointed in-memory, so a session can be resumed/re-streamed by
-thread_id while the process is alive (e.g. frontend reconnects mid-run).
-
-Cross-restart persistence (the spec's "Persistence Layer" requirement)
-is handled separately at the API layer via SQLite -- session metadata
-and the final report are written there once the graph completes.
-Swapping MemorySaver for a SqliteSaver/PostgresSaver checkpointer later
-would extend recoverability to process crashes too; see
-engineering-decisions.md for this tradeoff.
+Persistence/recoverability is provided by LangGraph's SqliteSaver
+checkpointer: every node transition is written to a SQLite file keyed by
+session_id (thread_id), so a session can be resumed after a client
+reconnect or a server restart. Session metadata and the final report are
+stored separately in app.db once the graph completes.
 """
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 
+from app.core.checkpoint import get_checkpointer
 from app.graph.state import GraphState
 from app.graph import nodes
 
@@ -69,9 +63,7 @@ def build_graph():
 
     graph.add_edge("report_generation", END)
 
-    checkpointer = MemorySaver()
-
-    return graph.compile(checkpointer=checkpointer)
+    return graph.compile(checkpointer=get_checkpointer())
 
 
 # Compiled once at import time; reused across requests
