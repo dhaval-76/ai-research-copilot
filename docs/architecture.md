@@ -88,6 +88,19 @@ The graph is compiled with `SqliteSaver` as a checkpointer, keyed by `session_id
 
 Provider-agnostic via `get_chat_model()` — defaults to Groq (free tier, fast) for development. Swapping to OpenAI/Anthropic/Gemini for production is a config change, not a code change.
 
+## API Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/sessions` | Create a research session (company, website, objective) |
+| `GET` | `/sessions` | List session history |
+| `GET` | `/sessions/{id}` | Session detail, including report once complete |
+| `GET` | `/sessions/{id}/run` | SSE stream — executes the LangGraph workflow, one event per node, final event carries the report |
+| `POST` | `/sessions/{id}/chat` | Ask a follow-up question (answered from the report) |
+| `GET` | `/sessions/{id}/chat` | Chat history for the session |
+
+`/sessions/{id}/run` is the core "Workflow Execution API" + "Workflow Progress UI" requirement — the frontend opens this with `EventSource` and renders each `{node, status}` event as it arrives.
+
 ## Frontend (React)
 
 - Session creation form (company, website, objective)
