@@ -35,10 +35,26 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
     }
   }, [session.id]);
 
+  const isFailed = session.status === "failed";
+  const isInterrupted = session.status === "running";
+  const hasRunError = Boolean(runError);
+  const hasPersistedError = Boolean(session.error);
+
+  const showFailedPanel =
+    !running && isFailed && (hasRunError || hasPersistedError);
+  const showConnectionLostPanel = !running && isInterrupted && hasRunError;
+  const showInterruptedPanel = !running && isInterrupted && !hasRunError;
+  const showPrimaryButton =
+    !running &&
+    !showFailedPanel &&
+    !showConnectionLostPanel &&
+    (session.status === "pending" || isInterrupted);
+
   function handleRun() {
     setEvents([]);
     setRunError(null);
     setRunning(true);
+    onStatusChange(session.id, "running");
 
     streamRun(
       session.id,
@@ -64,7 +80,7 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
     );
   }
 
-  const canRun = session.status === "pending" || session.status === "failed";
+  const primaryButtonLabel = isInterrupted ? "Resume research" : "Run research";
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -101,19 +117,45 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
           )}
         </div>
 
-        {/* Run button */}
-        {canRun && !running && (
+        {/* Interrupted run — offer resume without treating it as a failure */}
+        {showInterruptedPanel && (
+          <div className="rounded-lg border border-accent/40 bg-accent/10 p-4 text-sm">
+            <p className="font-medium mb-1">Research in progress</p>
+            <p className="text-muted">
+              This session was interrupted (e.g. a reconnect or server restart).
+              Resume to continue from the last saved checkpoint.
+            </p>
+          </div>
+        )}
+
+        {/* Stream dropped while status is still running */}
+        {showConnectionLostPanel && (
+          <div className="rounded-lg border border-accent/40 bg-accent/10 p-4 text-sm">
+            <p className="font-medium mb-1">Connection lost</p>
+            <p className="text-muted">{runError}</p>
+            <button
+              onClick={handleRun}
+              className="mt-3 flex items-center gap-1.5 text-xs font-mono uppercase tracking-wide border border-accent/40 rounded px-2 py-1 hover:bg-accent/10 transition-colors text-accent"
+            >
+              <RefreshCw size={12} />
+              Resume research
+            </button>
+          </div>
+        )}
+
+        {/* Run / resume button */}
+        {showPrimaryButton && (
           <button
             onClick={handleRun}
             className="flex items-center gap-2 rounded-md bg-accent text-bg font-medium text-sm px-4 py-2 hover:bg-accent/90 transition-colors"
           >
-            <Play size={15} />
-            {session.status === "failed" ? "Retry research" : "Run research"}
+            {isInterrupted ? <RefreshCw size={15} /> : <Play size={15} />}
+            {primaryButtonLabel}
           </button>
         )}
 
-        {/* Error state */}
-        {(runError || session.error) && !running && (
+        {/* Workflow error — only for failed sessions */}
+        {showFailedPanel && (
           <div className="rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm text-danger">
             <p className="font-medium mb-1">Workflow failed</p>
             <p className="text-danger/90">{runError || session.error}</p>
@@ -131,7 +173,7 @@ export default function SessionDetail({ session, onStatusChange, onBack }: Sessi
         {running && events.length === 0 && (
           <div className="flex items-center gap-2 text-sm text-muted">
             <Loader2 size={15} className="animate-spin" />
-            Starting workflow…
+            {isInterrupted ? "Resuming workflow…" : "Starting workflow…"}
           </div>
         )}
 
