@@ -35,7 +35,7 @@ def build_graph():
     graph.add_node("competitor_research", nodes.competitor_research_node)
     graph.add_node("research", nodes.research_node)
     graph.add_node("gap_fill", nodes.gap_fill_node)
-    graph.add_node("analysis", nodes.analysis_node)
+    graph.add_node("analyze", nodes.analysis_node)
     graph.add_node("quality_check", nodes.quality_check_node)
     graph.add_node("report_generation", nodes.report_generation_node)
 
@@ -53,12 +53,12 @@ def build_graph():
     graph.add_conditional_edges(
         "research",
         nodes.route_after_research,
-        {"gap_fill": "gap_fill", "analysis": "analysis"},
+        {"gap_fill": "gap_fill", "analysis": "analyze"},
     )
     # gap_fill always loops back into research with a broadened plan
     graph.add_edge("gap_fill", "research")
 
-    graph.add_edge("analysis", "quality_check")
+    graph.add_edge("analyze", "quality_check")
 
     # Conditional edge #3: bounded quality retry loop
     graph.add_conditional_edges(
