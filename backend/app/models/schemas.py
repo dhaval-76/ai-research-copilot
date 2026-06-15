@@ -63,9 +63,16 @@ class ProgressEvent(BaseModel):
     error: Optional[str] = None
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: Optional[str] = None
+
+
 class SessionDetailResponse(SessionSummary):
     report: Optional[StructuredReport] = None
     progress_events: list[ProgressEvent] = []
+    chat_messages: list[ChatMessage] = []
 
 
 # ---------------------------------------------------------------------------
@@ -76,12 +83,6 @@ class SessionDetailResponse(SessionSummary):
 # ---------------------------------------------------------------------------
 # Chat
 # ---------------------------------------------------------------------------
-
-
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
-    created_at: Optional[str] = None
 
 
 class ChatRequest(BaseModel):

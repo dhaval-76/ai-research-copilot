@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from app.core import db
 from app.graph.workflow import research_graph
 from app.models.schemas import (
+    ChatMessage,
     ProgressEvent,
     SessionCreateRequest,
     SessionCreateResponse,
@@ -29,6 +30,19 @@ from app.models.schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _build_session_detail(session: dict) -> SessionDetailResponse:
+    session_id = session["id"]
+    report = db.get_report(session_id)
+    progress_events = db.get_progress_events(session_id)
+    chat_messages = db.get_chat_history(session_id) if report else []
+    return SessionDetailResponse(
+        **session,
+        report=report,
+        progress_events=[ProgressEvent(**e) for e in progress_events],
+        chat_messages=[ChatMessage(**m) for m in chat_messages],
+    )
 
 
 @router.post("", response_model=SessionCreateResponse)
@@ -77,7 +91,7 @@ def regenerate_session(session_id: str):
     db.reset_session(session_id)
 
     session = db.get_session(session_id)
-    return SessionDetailResponse(**session, report=None, progress_events=[])
+    return _build_session_detail(session)
 
 
 @router.get("", response_model=list[SessionSummary])
@@ -91,13 +105,7 @@ def get_session(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    report = db.get_report(session_id)
-    progress_events = db.get_progress_events(session_id)
-    return SessionDetailResponse(
-        **session,
-        report=report,
-        progress_events=[ProgressEvent(**e) for e in progress_events],
-    )
+    return _build_session_detail(session)
 
 
 @router.get("/{session_id}/run")

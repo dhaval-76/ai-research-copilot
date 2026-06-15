@@ -4,7 +4,7 @@ import { StatusBadge } from "./Badges";
 import WorkflowProgress from "./WorkflowProgress";
 import ReportView from "./ReportView";
 import ChatPanel from "./ChatPanel";
-import { streamRun, getChatHistory } from "../api";
+import { streamRun } from "../api";
 import type { ChatMessage, ProgressEvent, SessionDetail as SessionDetailType, SessionStatus, StructuredReport } from "../types";
 
 interface SessionDetailProps {
@@ -29,13 +29,7 @@ export default function SessionDetail({ session, onStatusChange, onRegenerate, o
     setRegenerating(false);
     setReport(session.report);
     setRunError(null);
-    setChatMessages(null);
-
-    if (session.report) {
-      getChatHistory(session.id)
-        .then((res) => setChatMessages(res.messages))
-        .catch(() => setChatMessages([]));
-    }
+    setChatMessages(session.report ? session.chat_messages : null);
   }, [session.id]);
 
   const isCompleted = session.status === "completed";
