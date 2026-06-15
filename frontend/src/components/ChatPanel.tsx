@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { Send, Loader2, MessageSquare } from "lucide-react";
 import { postChatMessage } from "../api";
 import type { ChatMessage } from "../types";
@@ -70,7 +73,29 @@ export default function ChatPanel({ sessionId, initialMessages }: ChatPanelProps
                   : "bg-surface2 text-text/90 border border-border"
               }`}
             >
-              {m.content}
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code(props) {
+                      const { children, className } = props;
+                      const match = /language-(\w+)/.exec(className || "");
+                    
+                      return match ? (
+                        <SyntaxHighlighter language={match[1]}>
+                          {String(children).replace(/\n$/, "")}
+                        </SyntaxHighlighter>
+                      ) : (
+                        <code className={className}>
+                          {children}
+                        </code>
+                      );
+                    },
+                  }}
+                >
+                  {m.content}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
         ))}
