@@ -10,6 +10,12 @@ errors on later requests). A pool sidesteps that: PostgresSaver gets a
 fresh, valid connection per operation, and the pool transparently
 reconnects if Postgres drops a connection for any reason -- the same
 pattern already used for the primary app DB (see db.py).
+
+Uses settings.resolved_checkpoint_database_url, which is a distinct
+Postgres connection string from the primary app DB (database_url) when
+CHECKPOINT_DATABASE_URL is set -- lets checkpoint storage be scaled,
+backed up, or hosted separately from session/report/chat data. Falls
+back to database_url (same instance) if unset.
 """
 
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -27,7 +33,7 @@ def get_checkpointer() -> PostgresSaver:
     if _checkpointer is None:
         settings = get_settings()
         _pool = ConnectionPool(
-            conninfo=settings.checkpoint_database_url,
+            conninfo=settings.resolved_checkpoint_database_url,
             min_size=1,
             max_size=10,
             kwargs={"autocommit": True, "prepare_threshold": 0},
