@@ -1,0 +1,74 @@
+x-postgres-healthcheck: &postgres-healthcheck
+  test: ["CMD-SHELL", "pg_isready -U postgres"]
+  interval: 5s
+  timeout: 5s
+  retries: 10
+
+services:
+  # Primary app database: sessions, reports, chat_messages, progress_events
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zylabs
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      # HOST:CONTAINER -- only the host-side (left) port changes if you
+      # remap it; containers always reach Postgres on 5432 internally,
+      # regardless of what's mapped here. DATABASE_URL below must keep
+      # using db:5432, never the host-mapped port.
+      - "5433:5432"
+    healthcheck: *postgres-healthcheck
+
+  # Separate database for LangGraph checkpoints -- decoupled from the
+  # primary app DB so checkpoint storage (higher write frequency, more
+  # disposable) can be scaled/pruned independently. See
+  # backend/app/core/checkpoint.py and config.py for the rationale.
+  checkpoint_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zylabs_checkpoints
+    volumes:
+      - checkpoint_db_data:/var/lib/postgresql/data
+    ports:
+      # Same note as above: container-internal port is always 5432.
+      - "5434:5432"
+    healthcheck: *postgres-healthcheck
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Service name + internal port 5432 -- NOT the host-mapped ports
+      # above (5433/5434), which only matter if you connect from your
+      # host machine (e.g. via psql on localhost:5433).
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/zylabs
+      CHECKPOINT_DATABASE_URL: postgresql://postgres:postgres@checkpoint_db:5432/zylabs_checkpoints
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://localhost:8080
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      checkpoint_db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  checkpoint_db_data:
