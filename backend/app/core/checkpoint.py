@@ -1,34 +1,38 @@
 """
-Durable LangGraph checkpoint store (SQLite).
+Durable LangGraph checkpoint store (Postgres).
 
-Persists per-node workflow state to disk so sessions can be resumed after
-a server restart or client reconnect. Uses a single long-lived sqlite3
-connection for the process lifetime (see SqliteSaver docs).
+Persists per-node workflow state so sessions can be resumed after a
+server restart or client reconnect. Backed by a psycopg ConnectionPool
+(not a single bare connection) -- PostgresSaver.from_conn_string()'s
+context-manager pattern was tried first and closed its connection
+unexpectedly under FastAPI's request lifecycle (connection is closed
+errors on later requests). A pool sidesteps that: PostgresSaver gets a
+fresh, valid connection per operation, and the pool transparently
+reconnects if Postgres drops a connection for any reason -- the same
+pattern already used for the primary app DB (see db.py).
 """
 
-import os
-import sqlite3
-
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import ConnectionPool
 
 from app.core.config import get_settings
 
-_checkpointer: SqliteSaver | None = None
-_conn: sqlite3.Connection | None = None
+_checkpointer: PostgresSaver | None = None
+_pool: ConnectionPool | None = None
 
 
-def get_checkpointer() -> SqliteSaver:
-    """Return the process-wide SqliteSaver, creating it on first use."""
-    global _checkpointer, _conn
+def get_checkpointer() -> PostgresSaver:
+    """Return the process-wide PostgresSaver, creating it on first use."""
+    global _checkpointer, _pool
     if _checkpointer is None:
         settings = get_settings()
-        db_dir = os.path.dirname(settings.checkpoint_db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-        _conn = sqlite3.connect(
-            settings.checkpoint_db_path,
-            check_same_thread=False,
+        _pool = ConnectionPool(
+            conninfo=settings.checkpoint_database_url,
+            min_size=1,
+            max_size=10,
+            kwargs={"autocommit": True, "prepare_threshold": 0},
+            open=True,
         )
-        _checkpointer = SqliteSaver(_conn)
+        _checkpointer = PostgresSaver(_pool)
         _checkpointer.setup()
     return _checkpointer

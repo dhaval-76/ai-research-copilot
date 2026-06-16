@@ -36,12 +36,9 @@ class Settings(BaseSettings):
     max_research_retries: int = 1
     max_search_results_per_query: int = 4
 
-    # --- persistence (sqlite) ---
-    database_path: str = "./data/app.db"
-    checkpoint_db_path: str = "./data/checkpoints.sqlite"
-
-    # --- persistence (postgresql) ---
-    database_url: str = ""
+    # --- persistence ---
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/zylabs"
+    checkpoint_database_url: str = "postgresql://postgres:postgres@localhost:5432/zylabs"
 
     # --- app ---
     log_level: str = "INFO"
