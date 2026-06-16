@@ -156,36 +156,6 @@ def _row_to_dict(row: dict | None) -> dict | None:
 
 def init_db():
     with get_conn() as conn:
-        print(conn.execute("""
-            SELECT
-                inet_server_addr(),
-                inet_server_port(),
-                version(),
-                current_database()
-        """).fetchone())
-        print(conn.execute("""
-            SELECT nspname
-            FROM pg_namespace
-            ORDER BY nspname
-        """).fetchall())
-        print(conn.execute("""
-            SELECT
-                n.nspname,
-                pg_catalog.pg_get_userbyid(n.nspowner) AS owner
-            FROM pg_namespace n
-            WHERE n.nspname='app'
-        """).fetchall())
-        print(conn.execute("""
-            SELECT current_user
-        """).fetchone())
-        print(conn.execute("SELECT current_database()").fetchone())
-        print(conn.execute("SHOW search_path").fetchone())
-        print(conn.execute("SELECT current_schema()").fetchone())
-        print(conn.execute("""
-            SELECT schema_name
-            FROM information_schema.schemata
-            WHERE schema_name='app'
-        """).fetchone())
         conn.execute(SCHEMA)
         _migrate(conn)
         conn.commit()
