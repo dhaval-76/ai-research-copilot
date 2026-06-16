@@ -131,14 +131,61 @@ def run_session(session_id: str):
         config = {"configurable": {"thread_id": session_id}}
         graph_state = research_graph.get_state(config)
 
-        if session["status"] == "running" and graph_state.next:
+        has_pending_steps = bool(graph_state.next)
+        has_final_report = "final_report" in (graph_state.values or {})
+
+        logger.info(
+            "run_session(%s): status=%r has_checkpoint=%s next=%r "
+            "has_final_report=%s",
+            session_id,
+            session["status"],
+            graph_state.values != {},
+            graph_state.next,
+            has_final_report,
+        )
+
+        # `next` can legitimately read as empty even mid-run: LangGraph
+        # commits a node's checkpoint, then separately resolves/commits
+        # the pending-write record that encodes "what's next" (this
+        # matters specifically for nodes with conditional outgoing
+        # edges, e.g. planner -> competitor_research/research). A
+        # reconnect landing in that narrow gap sees a checkpoint with
+        # next=() that is NOT actually finished. The only reliable
+        # "truly done" signal is whether final_report has been written
+        # into the checkpointed state -- that only happens after
+        # report_generation, the graph's last node before END.
+        is_actually_finished = has_final_report
+
+        if session["status"] == "running" and (
+            has_pending_steps or (graph_state.values and not is_actually_finished)
+        ):
             stream_input = None
-            logger.info("Resuming session %s from checkpoint", session_id)
+            logger.info(
+                "Resuming session %s from checkpoint (next=%r)",
+                session_id,
+                graph_state.next,
+            )
+        elif session["status"] == "running" and not graph_state.values:
+            # Status says running but no checkpoint exists at all --
+            # the disconnect happened before the first superstep was
+            # ever committed (e.g. mid-planner-LLM-call on the very
+            # first run). Nothing to resume from; restart from scratch.
+            logger.warning(
+                "Session %s marked running but no checkpoint exists yet "
+                "-- restarting from scratch instead of resuming",
+                session_id,
+            )
+            stream_input = initial_state
         else:
             if session["status"] in ("pending", "failed"):
                 research_graph.checkpointer.delete_thread(session_id)
                 db.clear_progress_events(session_id)
             stream_input = initial_state
+            logger.info(
+                "Starting fresh run for session %s (status=%r)",
+                session_id,
+                session["status"],
+            )
 
         db.update_session_status(session_id, status="running")
 
