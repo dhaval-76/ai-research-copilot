@@ -28,8 +28,8 @@ COPY . .
 # Postgres-backed persistence, but harmless to ensure it exists.
 RUN mkdir -p /app/data
 
-EXPOSE 8000
+# EXPOSE 8000
 
 # No --reload in the image -- reload is a dev-only convenience, wired
 # in via docker-compose.override or a separate dev command instead.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
