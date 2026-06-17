@@ -218,5 +218,5 @@ This is a working prototype, not a production deployment. Notably
 absent: authentication/authorization (the API is currently open),
 automated tests, chat response streaming, LLM/search rate limiting, and
 parallel research execution (topics run sequentially). See
-`docs/engineering-decisions.md` for the full technical debt list and
-`docs/product-improvements.md` for the roadmap these gaps feed into.
+[docs/engineering-decisions.md](docs/engineering-decisions.md) for the full technical debt list and
+[docs/product-improvements.md](docs/product-improvements.md) for the roadmap these gaps feed into.
