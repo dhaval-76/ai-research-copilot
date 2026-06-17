@@ -191,6 +191,7 @@ docs/
   engineering-decisions.md
   product-improvements.md
 docker-compose.yml
+docker-compose.dev.yml
 ```
 
 ## Configuration
