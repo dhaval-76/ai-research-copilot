@@ -52,6 +52,26 @@ inside `docker-compose.yml` to point at the compose service names (`db`,
 of what host-side ports you've mapped them to. See the comments in
 `docker-compose.yml` if you change the port mappings.
 
+## Hybrid development with Docker Compose
+
+For active development, use `docker-compose.dev.yml` to bring up only the
+Postgres services, and then run the backend and frontend natively.
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Then start the backend and frontend locally as described below. In
+`backend/.env`, set `DATABASE_URL` and `CHECKPOINT_DATABASE_URL` to:
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/zylabs
+CHECKPOINT_DATABASE_URL=postgresql://postgres:postgres@localhost:5434/zylabs_checkpoints
+```
+
+This keeps the database environment stable while letting you iterate on
+backend and frontend code without rebuilding containers.
+
 ## Running locally without Docker
 
 ### Backend
@@ -133,15 +153,15 @@ Frontend runs on `http://localhost:5173`.
 
 ## API surface
 
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/sessions` | Create a session, or return an existing one for the same normalized company/website/objective |
-| `GET` | `/sessions` | List session history |
-| `GET` | `/sessions/{id}` | Session detail — includes report, persisted progress events, and chat history when available |
-| `GET` | `/sessions/{id}/run` | SSE stream that executes (or resumes) the LangGraph workflow, one event per node |
-| `POST` | `/sessions/{id}/regenerate` | Clear report/checkpoint/chat state and prepare the session for a fresh run |
-| `POST` | `/sessions/{id}/chat` | Ask a follow-up question, answered from the report |
-| `GET` | `/sessions/{id}/chat` | Chat history for the session (superseded for normal app use by `chat_messages` on `GET /sessions/{id}`; kept for direct access) |
+| Method | Path                        | Purpose                                                                                                                         |
+| ------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/sessions`                 | Create a session, or return an existing one for the same normalized company/website/objective                                   |
+| `GET`  | `/sessions`                 | List session history                                                                                                            |
+| `GET`  | `/sessions/{id}`            | Session detail — includes report, persisted progress events, and chat history when available                                    |
+| `GET`  | `/sessions/{id}/run`        | SSE stream that executes (or resumes) the LangGraph workflow, one event per node                                                |
+| `POST` | `/sessions/{id}/regenerate` | Clear report/checkpoint/chat state and prepare the session for a fresh run                                                      |
+| `POST` | `/sessions/{id}/chat`       | Ask a follow-up question, answered from the report                                                                              |
+| `GET`  | `/sessions/{id}/chat`       | Chat history for the session (superseded for normal app use by `chat_messages` on `GET /sessions/{id}`; kept for direct access) |
 
 Note: `GET /sessions/{id}/run` is a `GET`, not a `POST`, specifically
 because the frontend uses the browser's native `EventSource` API for
